@@ -20,9 +20,7 @@ def deriveRifSignature(key1):
     m.update(key1)
     return m.digest()
     
-def vci2psv(vci, psv):
-    keyFile = pathlib.Path(psv).stem + "-keys.bin"
-
+def vci2psv(vci, psv, key):    
     v = open(vci, "rb")
     print("Reading VCI file ...")
     header = struct.unpack("3sxIQ32s32s432x", v.read(SECTOR_SIZE))
@@ -34,16 +32,16 @@ def vci2psv(vci, psv):
         print("Deriving keys ...")
         
         # derive rif key from original key parts
-        key = deriveRifKey(header[3], header[4])
-        print("Rif Key: "+binascii.hexlify(key).decode("UTF-8"))
+        rifkey = deriveRifKey(header[3], header[4])
+        print("Rif Key: "+binascii.hexlify(rifkey).decode("UTF-8"))
             
         # derive rif signature from key parts
         sig = deriveRifSignature(header[3])
         print("Rif Signature: "+binascii.hexlify(sig).decode("UTF-8"))
         
         # write key parts to a file
-        k = open(keyFile, "wb")
-        print("Writing key parts to: \""+keyFile+"\" ...")
+        k = open(key, "wb")
+        print("Writing key file ...")
 
         k.write(header[3])
         k.write(header[4])
@@ -53,7 +51,7 @@ def vci2psv(vci, psv):
         print("Writing PSV file ...")
         
         # write PSV header
-        p.write(struct.pack("3sxII32s20s32sQQ400x", b"PSV", 0x1, 0, key, sig, b"\x00"*0x20, totalSize, 1))
+        p.write(struct.pack("3sxII32s20s32sQQ400x", b"PSV", 0x1, 0, rifkey, sig, b"\x00"*0x20, totalSize, 1))
         
         # write all sectors to PSV
         m = hashlib.sha256()        
@@ -69,13 +67,30 @@ def vci2psv(vci, psv):
         
         p.close()
     else:
-        print("VCI Header is invalid.")
+        print("Error: VCI Header is invalid.")
     v.close()
     
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("usage: [vcifile] [psvfile]")
+        print("usage: <vcifile> [psvfile] [keyfile]")
         quit()
     vciFile = sys.argv[1]
-    psvFile = sys.argv[2]
-    vci2psv(vciFile, psvFile)
+    
+    # get psv filename
+    
+    psvFile = None
+    if len(sys.argv) >= 3:
+        psvFile = sys.argv[2]
+    else:
+        psvFile = pathlib.Path(vciFile).stem + ".psv"
+        
+    # get key filename
+    
+    keyFile = None
+    if len(sys.argv) >= 4:
+        keyFile = sys.argv[3]
+    else:
+        keyFile = pathlib.Path(psvFile).stem + "-keys.bin"
+        
+    # create PSV file
+    vci2psv(vciFile, psvFile, keyFile)
